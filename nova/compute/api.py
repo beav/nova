@@ -2996,6 +2996,12 @@ class HostAPI(base.Base):
                          must_be_up=True)
         return self.rpcapi.get_host_uptime(context, host=host_name)
 
+    def get_host_sysuuid(self, context, host_name):
+        """Returns the result of calling "uptime" on the target host."""
+        host_name = self._assert_host_exists(context, host_name,
+                         must_be_up=True)
+        return self.rpcapi.get_host_sysuuid(context, host=host_name)
+
     @wrap_exception()
     def host_power_action(self, context, host_name, action):
         """Reboots, shuts down or powers up the host."""

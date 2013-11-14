@@ -321,8 +321,46 @@ class HypervisorsTest(test.NoDBTestCase):
                                         use_admin_context=True)
         self.assertRaises(exc.HTTPNotFound, self.controller.uptime, req, 'abc')
 
-    def test_uptime_non_admin(self):
-        req = fakes.HTTPRequestV3.blank('/os-hypervisors/1/uptime')
+    def test_sysuuid_noid(self):
+        req = fakes.HTTPRequestV3.blank('/os-hypervisors/3',
+                                        use_admin_context=True)
+        self.assertRaises(exc.HTTPNotFound, self.controller.show, req, '3')
+
+    def test_sysuuid_notimplemented(self):
+        def fake_get_host_sysuuid(context, hyp):
+            raise exc.HTTPNotImplemented()
+
+        self.stubs.Set(self.controller.host_api, 'get_host_sysuuid',
+                       fake_get_host_sysuuid)
+
+        req = fakes.HTTPRequestV3.blank('/os-hypervisors/1',
+                                        use_admin_context=True)
+        self.assertRaises(exc.HTTPNotImplemented,
+                          self.controller.sysuuid, req, '1')
+
+    def test_sysuuid_implemented(self):
+        def fake_get_host_sysuuid(context, hyp):
+            return "1234-FAKE-UUID"
+
+        self.stubs.Set(self.controller.host_api, 'get_host_sysuuid',
+                       fake_get_host_sysuuid)
+
+        req = fakes.HTTPRequestV3.blank('/os-hypervisors/1',
+                                        use_admin_context=True)
+        result = self.controller.sysuuid(req, '1')
+
+        self.assertEqual(result, dict(hypervisor=dict(
+                         id=1,
+                         hypervisor_hostname="hyper1",
+                         sysuuid='1234-FAKE-UUID')))
+
+    def test_sysuuid_non_integer_id(self):
+        req = fakes.HTTPRequestV3.blank('/os-hypervisors/abc/sysuuid',
+                                        use_admin_context=True)
+        self.assertRaises(exc.HTTPNotFound, self.controller.uptime, req, 'abc')
+
+    def test_sysuuid_non_admin(self):
+        req = fakes.HTTPRequestV3.blank('/os-hypervisors/1/sysuuid')
         self.assertRaises(exception.PolicyNotAuthorized,
                           self.controller.uptime, req, '1')
 
@@ -541,6 +579,18 @@ class HypervisorsSerializersTest(test.NoDBTestCase):
                 hypervisor_hostname="hyper1",
                 id=1,
                 uptime='fake uptime'))
+        text = serializer.serialize(exemplar)
+        tree = etree.fromstring(text)
+
+        self.assertEqual('hypervisor', tree.tag)
+        self.compare_to_exemplar(exemplar['hypervisor'], tree)
+
+    def test_sysuuid_serializer(self):
+        serializer = hypervisors.HypervisorSysUUIDTemplate()
+        exemplar = dict(hypervisor=dict(
+                hypervisor_hostname="hyper1",
+                id=1,
+                sysuuid='1234-FAKE-UUID'))
         text = serializer.serialize(exemplar)
         tree = etree.fromstring(text)
 

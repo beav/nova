@@ -87,6 +87,14 @@ class HypervisorUptimeTemplate(xmlutil.TemplateBuilder):
         return xmlutil.MasterTemplate(root, 1)
 
 
+class HypervisorSysUUIDTemplate(xmlutil.TemplateBuilder):
+    def construct(self):
+        root = xmlutil.TemplateElement('hypervisor', selector='hypervisor')
+        make_hypervisor(root, False)
+        root.set('sysuuid')
+        return xmlutil.MasterTemplate(root, 1)
+
+
 class HypervisorServersTemplate(xmlutil.TemplateBuilder):
     def construct(self):
         root = xmlutil.TemplateElement('hypervisor', selector='hypervisor')
@@ -208,6 +216,28 @@ class HypervisorsController(object):
         return dict(hypervisor=self._view_hypervisor(hyp, False,
                                                      uptime=uptime))
 
+    @extensions.expected_errors((404, 501))
+    @wsgi.serializers(xml=HypervisorSysUUIDTemplate)
+    def sysuuid(self, req, id):
+        context = req.environ['nova.context']
+        authorize(context)
+        try:
+            hyp = self.host_api.compute_node_get(context, id)
+        except (ValueError, exception.ComputeHostNotFound):
+            msg = _("Hypervisor with ID '%s' could not be found.") % id
+            raise webob.exc.HTTPNotFound(explanation=msg)
+
+        # Get the system uuid
+        try:
+            host = hyp['service']['host']
+            sysuuid = self.host_api.get_host_sysuuid(context, host)
+        except NotImplementedError:
+            msg = _("Virt driver does not implement sysuuid function.")
+            raise webob.exc.HTTPNotImplemented(explanation=msg)
+
+        return dict(hypervisor=self._view_hypervisor(hyp, False,
+                                                     sysuuid=sysuuid))
+
     @extensions.expected_errors(400)
     @wsgi.serializers(xml=HypervisorIndexTemplate)
     def search(self, req):
@@ -262,6 +292,7 @@ class Hypervisors(extensions.V3APIExtensionBase):
                                     'search': 'GET',
                                     'statistics': 'GET'},
                 member_actions={'uptime': 'GET',
+                                'sysuuid': 'GET',
                                 'servers': 'GET'})]
 
         return resources
